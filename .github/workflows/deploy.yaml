@@ -1,0 +1,111 @@
+name: Deploy Itaú purchase propensity model
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to perform (apply or destroy)"
+        required: true
+        default: "apply"
+        type: choice
+        options:
+          - apply
+          - destroy
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff check)
+        run: |
+          uv run ruff check . || {
+            echo "::error::Lint falhou. Rode 'uv run ruff check --fix .' localmente, corrija, faça commit e rode o deploy novamente."
+            exit 1
+          }
+
+      - name: Lint (ruff format)
+        run: |
+          uv run ruff format --check . || {
+            echo "::error::Formatação falhou. Rode 'uv run ruff format .' localmente, faça commit e rode o deploy novamente."
+            exit 1
+          }
+
+      - name: Run tests
+        run: uv run pytest
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+
+    env:
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        working-directory: infra
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=itau/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      # O ECR precisa existir antes do docker push, mas é o próprio Terraform
+      # que cria o ECR — por isso ele sobe sozinho primeiro, isolado do resto.
+      - name: Terraform apply (ECR only)
+        if: github.event.inputs.action == 'apply'
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve -target=aws_ecr_repository.this -var="image_tag=${{ github.sha }}"
+
+      - name: Login to ECR
+        if: github.event.inputs.action == 'apply'
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        if: github.event.inputs.action == 'apply'
+        run: docker build -t app:${{ github.sha }} .
+
+      - name: Push image to ECR
+        if: github.event.inputs.action == 'apply'
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker tag app:${{ github.sha }} $REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+          docker push $REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
+
+      - name: Terraform plan
+        if: github.event.inputs.action == 'apply'
+        working-directory: infra
+        run: terraform plan -input=false -var="image_tag=${{ github.sha }}" -out=tfplan
+
+      - name: Terraform apply
+        if: github.event.inputs.action == 'apply'
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Terraform destroy
+        if: github.event.inputs.action == 'destroy'
+        working-directory: infra
+        run: terraform destroy -input=false -auto-approve -var="image_tag=${{ github.sha }}"
