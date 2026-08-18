@@ -22,7 +22,9 @@ def _trending_key(repo: DataRepository, product_id: str) -> tuple[float, float]:
 
 
 def cold_start_ranking(repo: DataRepository, top_n: int) -> list[str]:
-    ranked = sorted(repo.all_product_ids, key=lambda pid: _trending_key(repo, pid), reverse=True)
+    ranked = sorted(
+        repo.all_product_ids, key=lambda pid: _trending_key(repo, pid), reverse=True
+    )
 
     best_per_category: dict[str, str] = {}
     for product_id in ranked:
@@ -45,7 +47,9 @@ def recommend(
 
     if cold_start:
         ranked = cold_start_ranking(repo, top_n)
-        items = [RankedProduct(product_id=product_id, score=None) for product_id in ranked]
+        items = [
+            RankedProduct(product_id=product_id, score=None) for product_id in ranked
+        ]
         return RecommendationResult(items=items, cold_start=True)
 
     rows = [
@@ -54,6 +58,9 @@ def recommend(
     ]
     scores = dict(zip(repo.all_product_ids, model.predict_proba(rows)))
     ranked = sorted(scores, key=lambda pid: scores[pid], reverse=True)[:top_n]
-    items = [RankedProduct(product_id=product_id, score=scores[product_id]) for product_id in ranked]
+    items = [
+        RankedProduct(product_id=product_id, score=scores[product_id])
+        for product_id in ranked
+    ]
 
     return RecommendationResult(items=items, cold_start=False)

@@ -4,7 +4,9 @@ from fastapi import FastAPI
 
 from itau_purchase_propensity.api.routes.health import router as health_router
 from itau_purchase_propensity.api.routes.metrics import router as metrics_router
-from itau_purchase_propensity.api.routes.recommendations import router as recommendations_router
+from itau_purchase_propensity.api.routes.recommendations import (
+    router as recommendations_router,
+)
 from itau_purchase_propensity.core.config import config
 from itau_purchase_propensity.core.logging import configure_logging
 from itau_purchase_propensity.core.metrics import track_request_metrics

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -32,7 +33,13 @@ def repo(tmp_path: Path) -> DataRepository:
 
 
 class FakeModel:
-    feature_cols = ["interactions", "price", "avg_rating", "popularity_score", "user_affinity_match"]
+    feature_cols: ClassVar[list[str]] = [
+        "interactions",
+        "price",
+        "avg_rating",
+        "popularity_score",
+        "user_affinity_match",
+    ]
 
     def predict_proba(self, feature_rows: list[list[float]]) -> list[float]:
         i = self.feature_cols.index("interactions")

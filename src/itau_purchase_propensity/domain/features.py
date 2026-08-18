@@ -1,7 +1,9 @@
 from itau_purchase_propensity.data.repository import DataRepository
 
 
-def compute_features(repo: DataRepository, user_id: str, product_id: str) -> dict[str, float]:
+def compute_features(
+    repo: DataRepository, user_id: str, product_id: str
+) -> dict[str, float]:
     product = repo.products[product_id]
     affinity_category = repo.get_affinity_category(user_id)
 

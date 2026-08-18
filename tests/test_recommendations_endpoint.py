@@ -21,7 +21,13 @@ def test_get_recommendations_known_user(repo, fake_model):
     body = response.json()
     assert body["user_id"] == "u1"
     assert body["cold_start"] is False
-    assert [item["product_id"] for item in body["items"]] == ["p_a1", "p_b1", "p_a2", "p_a3", "p_b2"]
+    assert [item["product_id"] for item in body["items"]] == [
+        "p_a1",
+        "p_b1",
+        "p_a2",
+        "p_a3",
+        "p_b2",
+    ]
 
 
 def test_get_recommendations_unknown_user_is_cold_start(repo, fake_model):

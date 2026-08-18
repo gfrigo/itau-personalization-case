@@ -2,7 +2,10 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from itau_purchase_propensity.api.schemas.recommendation import RecommendationItem, RecommendationResponse
+from itau_purchase_propensity.api.schemas.recommendation import (
+    RecommendationItem,
+    RecommendationResponse,
+)
 from itau_purchase_propensity.core.config import config
 from itau_purchase_propensity.core.metrics import (
     MODEL_SCORE,
@@ -44,5 +47,8 @@ def get_recommendations(user_id: str, request: Request) -> RecommendationRespons
     return RecommendationResponse(
         user_id=user_id,
         cold_start=result.cold_start,
-        items=[RecommendationItem(product_id=item.product_id, score=item.score) for item in result.items],
+        items=[
+            RecommendationItem(product_id=item.product_id, score=item.score)
+            for item in result.items
+        ],
     )

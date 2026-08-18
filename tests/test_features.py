@@ -9,7 +9,7 @@ def test_compute_features_known_user_matching_category(repo):
         "price": 100.0,
         "avg_rating": 4.5,
         "popularity_score": 0.8,
-        "user_affinity_match": 1, 
+        "user_affinity_match": 1,
     }
 
 

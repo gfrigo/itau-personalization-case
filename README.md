@@ -29,8 +29,8 @@ import pickle
 with open("model/model.pkl", "rb") as f:
     artifact = pickle.load(f)
 
-model = artifact["model"]          # sklearn LogisticRegression
-scaler = artifact["scaler"]        # sklearn StandardScaler
+model = artifact["model"]  # sklearn LogisticRegression
+scaler = artifact["scaler"]  # sklearn StandardScaler
 feature_cols = artifact["feature_cols"]  # ordem exata das features esperadas
 ```
 

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 class RecommendationItem(BaseModel):
     product_id: str
-    score: float
+    score: float | None
 
 
 class RecommendationResponse(BaseModel):

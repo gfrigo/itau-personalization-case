@@ -14,7 +14,8 @@ RECOMMENDATIONS_TOTAL = Counter(
     "recommendations_total", "Total de recomendacoes servidas"
 )
 RECOMMENDATIONS_COLD_START_TOTAL = Counter(
-    "recommendations_cold_start_total", "Recomendacoes servidas via fallback de cold start"
+    "recommendations_cold_start_total",
+    "Recomendacoes servidas via fallback de cold start",
 )
 MODEL_SCORE = Histogram(
     "model_score",
