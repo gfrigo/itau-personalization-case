@@ -3,9 +3,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from itau_purchase_propensity.api.routes.health import router as health_router
+from itau_purchase_propensity.api.routes.metrics import router as metrics_router
 from itau_purchase_propensity.api.routes.recommendations import router as recommendations_router
 from itau_purchase_propensity.core.config import config
 from itau_purchase_propensity.core.logging import configure_logging
+from itau_purchase_propensity.core.metrics import track_request_metrics
 from itau_purchase_propensity.data.repository import DataRepository
 from itau_purchase_propensity.ml.model import PropensityModel
 
@@ -22,5 +24,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Personalization Service", lifespan=lifespan)
 
+app.middleware("http")(track_request_metrics)
+
 app.include_router(health_router)
 app.include_router(recommendations_router)
+app.include_router(metrics_router)
