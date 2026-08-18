@@ -4,8 +4,6 @@ import pytest
 
 from itau_purchase_propensity.data.repository import DataRepository
 
-# 5 produtos / 2 categorias, desenhados para que a cota por categoria do cold
-# start divirja do ranking puro por trending (ver test_recommender.py).
 PRODUCTS_CSV = """product_id,category,price,avg_rating,popularity_score
 p_a1,eletronicos,100.0,4.5,0.8
 p_a2,eletronicos,50.0,3.0,0.2
@@ -34,9 +32,6 @@ def repo(tmp_path: Path) -> DataRepository:
 
 
 class FakeModel:
-    """Score deterministico (interactions*10 + affinity_match) para ranking previsível em teste,
-    sem acoplar a suite aos pesos do LogisticRegression treinado."""
-
     feature_cols = ["interactions", "price", "avg_rating", "popularity_score", "user_affinity_match"]
 
     def predict_proba(self, feature_rows: list[list[float]]) -> list[float]:

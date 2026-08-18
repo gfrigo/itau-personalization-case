@@ -1,12 +1,9 @@
-"""Teste de integracao ponta a ponta: sobe a app real (lifespan + dados/modelo reais
-de data/ e model/) e bate via HTTP, sem mockar nenhuma camada interna."""
-
 import pytest
 from fastapi.testclient import TestClient
 
 from itau_purchase_propensity.main import app
 
-KNOWN_USER_ID = "u_0078"  # presente em data/events.csv
+KNOWN_USER_ID = "u_0078"
 
 
 @pytest.fixture(scope="module")

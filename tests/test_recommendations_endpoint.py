@@ -21,8 +21,6 @@ def test_get_recommendations_known_user(repo, fake_model):
     body = response.json()
     assert body["user_id"] == "u1"
     assert body["cold_start"] is False
-    # top_n_recommendations (config, default 10) > 5 produtos do fixture -> todos retornam,
-    # ordenados pelo score do FakeModel (interactions*10 + affinity_match).
     assert [item["product_id"] for item in body["items"]] == ["p_a1", "p_b1", "p_a2", "p_a3", "p_b2"]
 
 

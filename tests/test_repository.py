@@ -4,7 +4,7 @@ def test_is_known_user(repo):
 
 
 def test_get_interaction_count_sums_all_event_types(repo):
-    assert repo.get_interaction_count("u1", "p_a1") == 2  # view + purchase
+    assert repo.get_interaction_count("u1", "p_a1") == 2
     assert repo.get_interaction_count("u1", "p_b2") == 0
 
 

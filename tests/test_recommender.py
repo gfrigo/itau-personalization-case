@@ -17,8 +17,6 @@ def test_recommend_unknown_user_triggers_cold_start(repo, fake_model):
 
 
 def test_cold_start_ranking_guarantees_category_coverage(repo):
-    # Trending puro colocaria p_a3 (eletronicos, 5.0) a frente de p_b1 (livros, 3.0),
-    # deixando "livros" de fora do top 2. A cota por categoria evita isso.
     ranking = cold_start_ranking(repo, top_n=2)
 
     assert ranking == ["p_a1", "p_b1"]
