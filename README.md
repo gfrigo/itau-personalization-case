@@ -1,14 +1,14 @@
 # Personalization Case - Itaú
 
-## Overview
+## Visão Geral
 
 Microserviço que serve recomendações de produtos personalizadas via API, usando um modelo de propensão de compra já treinado.
 
-## Solution Architecture
+## Arquitetura da Solução
 
 ![Arquitetura da solução](docs/solution_architecture.png)
 
-## Purchase Propensity API Workflow
+## Fluxo da API de Propensão de Compra
 
 1. **Processamento de dados**: `events.csv` e `products.csv` são processados em memória no startup da API (dado estático, sem fase de treinamento — não há necessidade de pipeline de ingestão contínuo).
 2. **Cálculo de features**: as 5 features do `model_card.json` são derivadas dos dados pré-processados, respeitando a ordem exata (`feature_cols`) esperada pelo modelo.
@@ -17,7 +17,7 @@ Microserviço que serve recomendações de produtos personalizadas via API, usan
 5. **Observabilidade**: logs JSON estruturados e métricas Prometheus (`/metrics`) em cada requisição.
 6. **Deploy**: CI/CD via GitHub Actions builda a imagem, publica no ECR e aplica a infraestrutura (Terraform) na AWS.
 
-## Api
+## API
 
 ### Rodando localmente
 
@@ -63,7 +63,7 @@ Copie `.env.example` para `.env` — os valores default já funcionam sem altera
 - **Métricas Prometheus** (`/metrics`): contagem de requisições, latência por rota, taxa de cold start e distribuição do score do modelo.
 - Detalhes completos e decisões de trade-off em [SOLUTION.md](SOLUTION.md).
 
-## Requirements
+## Requisitos
 
 - Python >= 3.12
 - [uv](https://docs.astral.sh/uv/) (gerenciador de pacotes)
