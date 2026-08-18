@@ -8,7 +8,7 @@ from itau_purchase_propensity.ml.model import PropensityModel
 @dataclass
 class RankedProduct:
     product_id: str
-    score: float
+    score: float | None
 
 
 @dataclass
@@ -22,13 +22,6 @@ def _trending_key(repo: DataRepository, product_id: str) -> tuple[float, float]:
 
 
 def cold_start_ranking(repo: DataRepository, top_n: int) -> list[str]:
-    """Ordena por interesse recente observado, garantindo ao menos um produto por categoria.
-
-    Sem historico o modelo perde `interactions`, sua feature dominante, e a ordenacao residual
-    nao carrega sinal de usuario nenhum. A cota por categoria e exploracao deliberada: e por
-    categoria que `user_affinity_match` e derivada, entao cobrir todas encurta o caminho ate o
-    servico ter sinal proprio sobre o usuario.
-    """
     ranked = sorted(repo.all_product_ids, key=lambda pid: _trending_key(repo, pid), reverse=True)
 
     best_per_category: dict[str, str] = {}
@@ -50,17 +43,17 @@ def recommend(
 ) -> RecommendationResult:
     cold_start = not repo.is_known_user(user_id)
 
+    if cold_start:
+        ranked = cold_start_ranking(repo, top_n)
+        items = [RankedProduct(product_id=product_id, score=None) for product_id in ranked]
+        return RecommendationResult(items=items, cold_start=True)
+
     rows = [
         to_feature_row(compute_features(repo, user_id, product_id), model.feature_cols)
         for product_id in repo.all_product_ids
     ]
     scores = dict(zip(repo.all_product_ids, model.predict_proba(rows)))
-
-    if cold_start:
-        ranked = cold_start_ranking(repo, top_n)
-    else:
-        ranked = sorted(scores, key=lambda pid: scores[pid], reverse=True)[:top_n]
-
+    ranked = sorted(scores, key=lambda pid: scores[pid], reverse=True)[:top_n]
     items = [RankedProduct(product_id=product_id, score=scores[product_id]) for product_id in ranked]
 
-    return RecommendationResult(items=items, cold_start=cold_start)
+    return RecommendationResult(items=items, cold_start=False)

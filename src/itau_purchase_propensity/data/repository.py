@@ -2,8 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 
-# Peso de funil: quanto mais perto da compra, mais o evento vale como sinal de interesse.
-# Os valores sao convencao, nao estimativa -- documentado no SOLUTION.md.
 EVENT_WEIGHTS = {"view": 1.0, "click": 2.0, "add_to_cart": 3.0, "purchase": 5.0}
 
 
@@ -36,9 +34,6 @@ class DataRepository:
 
     @staticmethod
     def _build_trending_scores(events: pd.DataFrame, window_days: int) -> dict[str, float]:
-        # Janela ancorada no ultimo evento do snapshot, nao em now(): events.csv e um historico
-        # estatico, entao uma janela relativa ao relogio devolveria zero eventos. Num pipeline
-        # com ingestao continua isso viraria now() + alerta de lag de ingestao.
         cutoff = events["timestamp"].max() - pd.Timedelta(days=window_days)
         recent = events[events["timestamp"] >= cutoff]
         weights = recent["event_type"].map(EVENT_WEIGHTS).fillna(0.0)
