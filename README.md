@@ -17,6 +17,9 @@ Microserviço que serve recomendações de produtos personalizadas via API, usan
 5. **Observabilidade**: logs JSON estruturados e métricas Prometheus (`/metrics`) em cada requisição.
 6. **Deploy**: CI/CD via GitHub Actions builda a imagem, publica no ECR e aplica a infraestrutura (Terraform) na AWS.
 
+Requisição feita ao AWS Load Balancer:
+![Arquitetura da solução](docs/request_aws.png)
+
 ## API
 
 ### Rodando localmente
