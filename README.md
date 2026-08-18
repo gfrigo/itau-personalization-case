@@ -1,95 +1,93 @@
-# SOLUTION.md — Personalization Service
+# Personalization Case - Itaú
 
-## Como rodar o projeto
+## Overview
 
-**Local (sem Docker):**
-- `uv sync` — instala dependências
-- Copiar `.env.example` para `.env`
-- `uv run uvicorn itau_purchase_propensity.main:app --reload`
+Microserviço que serve recomendações de produtos personalizadas via API, usando um modelo de propensão de compra já treinado.
 
-**Via Docker (recomendado):**
-- `make build` — builda a imagem
-- `make run` — sobe o container (porta 8000, lê `.env`)
-- `make logs` — acompanha os logs
-- `make stop` — para o container
-- Swagger interativo: `http://localhost:8000/docs`
+## Solution Architecture
 
-**Testes:**
-- `uv run pytest` — unitários + integração
-- `uv run ruff check .` e `uv run ruff format --check .` — lint/formatação (mesmo que o CI roda)
+![Arquitetura da solução](docs/solution_architecture.png)
 
----
+## Purchase Propensity API Workflow
 
-## 1. Processamento / ingestão de dados
+1. **Processamento de dados**: `events.csv` e `products.csv` são processados em memória no startup da API (dado estático, sem fase de treinamento — não há necessidade de pipeline de ingestão contínuo).
+2. **Cálculo de features**: as 5 features do `model_card.json` são derivadas dos dados pré-processados, respeitando a ordem exata (`feature_cols`) esperada pelo modelo.
+3. **Endpoint de recomendação**: roda o modelo sobre o catálogo e retorna os top N produtos ranqueados por score.
+4. **Cold start**: usuários sem histórico recebem um ranking por popularidade agregada com diversidade de categoria, sem rodar o modelo.
+5. **Observabilidade**: logs JSON estruturados e métricas Prometheus (`/metrics`) em cada requisição.
+6. **Deploy**: CI/CD via GitHub Actions builda a imagem, publica no ECR e aplica a infraestrutura (Terraform) na AWS.
 
-- Processamento feito em memória, na classe `DataRepository`, executado **uma vez no startup** da API (evento `lifespan` do FastAPI)
-- **Por quê nesse formato**: os dados (`events.csv`, `products.csv`) são estáticos e não há fase de treinamento neste case — não há necessidade de um pipeline de ingestão contínuo, nem de banco de dados
-- No `__init__`, os CSVs são transformados em estruturas de lookup O(1) (dicts), evitando reprocessar `pandas` a cada requisição:
-  - `products`: metadados do produto
-  - `interaction_counts`: contagem de interações usuário-produto
-  - `user_affinity`: categoria de maior afinidade por usuário
-  - `known_users`: quem tem histórico (usado na detecção de cold start)
-  - `trending_scores`: popularidade recente ponderada por funil (usado no fallback de cold start)
-- **Trade-off assumido**: o cálculo é refeito a cada novo container/restart. Como o volume de dados é pequeno e o dataset é estático, isso não é um problema neste escopo. Uma alternativa (pré-computar os resultados e persistir em S3/Parquet, servindo só leitura no startup) foi considerada e descartada — reduziria custo de CPU no startup, mas adicionaria uma dependência externa (S3, IAM) sem ganho de performance perceptível no request em si, dado o tamanho do dataset
-- Peso de funil (`EVENT_WEIGHTS`: view=1, click=2, add_to_cart=3, purchase=5) é uma **convenção**, não uma estimativa treinada — documentado no código
+## Api
 
-## 2. Cálculo de features
+### Rodando localmente
 
-- As 5 features exigidas pelo `model_card.json` são calculadas em `domain/features.py`, na ordem exata esperada pelo modelo (`to_feature_row` respeita `feature_cols` do `model.pkl` — crítico pro `sklearn`, que não valida nomes de coluna)
-- `interactions`, `price`, `avg_rating`, `popularity_score`: leitura direta das estruturas pré-processadas
-- `user_affinity_match`: derivada de `events.csv` + `products.csv` — para cada usuário, identifica a categoria com maior número de interações históricas (join por `product_id`, `groupby` por categoria, pega a maior contagem); compara com a categoria do produto avaliado
-- **Critério de desempate**: nenhum implementado explicitamente (o `pandas` mantém a primeira ocorrência em caso de contagem igual) — variação aceitável dentro do que o model card permite
-- Usuário sem histórico naturalmente recebe `user_affinity_match = 0` (comparação com `None` é `False`) — sem `if` especial para esse caso
+```bash
+make build   # builda a imagem Docker
+make run     # sobe o container (porta 8000)
+make logs    # acompanha os logs
+make stop    # para o container
+```
 
-## 3. Endpoint de recomendação
+Swagger interativo: `http://localhost:8000/docs`
 
-- `GET /recommendations/{user_id}`: roda o modelo para todos os produtos do catálogo, ranqueia por score (usuário conhecido) e retorna os top N (`TOP_N_RECOMMENDATIONS`, configurável via `.env`)
-- `GET /health`: health check simples, usado também pelo target group do ALB na AWS
-- Campo `score` é **opcional** (`float | None`) no schema de resposta: em cold start, vem `null` — decisão tomada para não expor ao consumidor um número de baixa confiança calculado sobre features quase todas zeradas
+### Arquivo `.env`
 
-## 4. Cold start
+Copie `.env.example` para `.env` — os valores default já funcionam sem alteração:
 
-- **Detecção**: `user_id` fora do conjunto de usuários conhecidos em `events.csv`
-- **Estratégia**: ranking por popularidade agregada ponderada por funil (últimos 30 dias, ancorados no último timestamp do dataset — não em `now()`, já que o dado é um snapshot estático), combinada com uma **cota de diversidade por categoria** (garante ao menos 1 produto de cada categoria antes de completar com os demais mais populares)
-- **Por quê essa estratégia**: não há formulário de onboarding, cookies de terceiros ou integração com redes sociais disponíveis para inferir interesse — popularidade agregada é o único sinal existente no dado fornecido
-- O modelo **não é executado** para usuários em cold start — o ranking não usa o score, então calcular seria custo de CPU sem uso real
+| Variável | Descrição |
+|---|---|
+| `EVENTS_PATH` | Caminho do `events.csv` |
+| `PRODUCTS_PATH` | Caminho do `products.csv` |
+| `MODEL_PATH` | Caminho do `model.pkl` |
+| `TOP_N_RECOMMENDATIONS` | Quantos produtos retornar por recomendação |
+| `LOG_LEVEL` | Nível de log (`INFO`, `DEBUG`, etc.) |
 
-## 5. Testes
+### Endpoints
 
-- **Unitários**: cálculo de features (`test_features.py`), estruturas do repositório (`test_repository.py`), lógica de ranking e cold start (`test_recommender.py`), endpoint isolado (`test_recommendations_endpoint.py`)
-- **Integração** (`test_integration.py`): sobe a aplicação real via `TestClient`, sem mockar camadas internas — valida `/health`, usuário conhecido e cold start ponta a ponta
-- Fixture de dados (`conftest.py`) desenhada propositalmente para que o ranking puro por trending divirja do ranking com cota de categoria — evita que o teste passe "por acaso"
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `GET` | `/recommendations/{user_id}` | Lista ranqueada de produtos recomendados para o usuário |
+| `GET` | `/metrics` | Métricas no formato Prometheus |
 
-## 6. Observabilidade
+## Cold Start
 
-**Hoje:**
-- Logs estruturados em JSON (`core/logging.py`), incluindo `user_id`, `cold_start` e `duration_ms` na requisição principal
-- Métricas expostas em `/metrics`, formato Prometheus (`prometheus_client`):
-  - `http_requests_total` / `http_request_duration_seconds` — contagem e latência por rota (label de path é o template da rota, ex: `/recommendations/{user_id}`, evitando alta cardinalidade)
-  - `recommendations_total` e `recommendations_cold_start_total` — permite calcular taxa de cold start
-  - `model_score` — distribuição dos scores do modelo (só para usuários conhecidos)
+1. Verifica se o `user_id` existe no histórico de `events.csv`.
+2. Se não existir, ativa o fallback: ranking por popularidade agregada dos últimos 30 dias, ponderada por tipo de evento (funil: view < click < add_to_cart < purchase).
+3. Aplica uma cota de diversidade: garante ao menos 1 produto de cada categoria antes de completar a lista com os demais mais populares.
+4. O modelo não é executado nesse caminho — o campo `score` retorna `null`, evitando expor um número pouco confiável.
 
-**O que adicionaria com mais tempo:**
-- Log estruturado também no caminho de erro (hoje só o caminho de sucesso é logado — uma exceção não gera log específico)
-- Tracing distribuído (ex: OpenTelemetry) para correlacionar logs/métricas por request-id entre múltiplos serviços
-- Alertas sobre taxa de erro e p95 de latência (hoje a métrica existe, mas não há regra de alerta configurada)
-- Métrica de drift do modelo (comparar distribuição de scores/features ao longo do tempo)
+## Observabilidade
 
-## 7. Infraestrutura (CI/CD + AWS)
+- **Logs estruturados (JSON)**: cada requisição de recomendação loga `user_id`, `cold_start` e `duration_ms`.
+- **Métricas Prometheus** (`/metrics`): contagem de requisições, latência por rota, taxa de cold start e distribuição do score do modelo.
+- Detalhes completos e decisões de trade-off em [SOLUTION.md](SOLUTION.md).
 
-- **CI/CD** (`.github/workflows/deploy.yaml`): disparo manual (`workflow_dispatch`), roda lint + testes antes de qualquer deploy; build/push da imagem para ECR; Terraform aplica primeiro só o ECR (bootstrap, resolve o "ovo e galinha" entre imagem e repositório) e depois o restante da infra
-- **Arquitetura AWS** (Terraform em `infra/`): ALB público → ECS Fargate (Task com 1 execução, sem servidor gerenciado) → ECR. Usa VPC/subnets default da conta para simplificar
-- Diagrama da arquitetura: `[inserir imagem/link do Excalidraw aqui]`
+## Requirements
 
-**Trade-offs assumidos na infra:**
-- `desired_count = 1` no ECS — sem redundância; aceitável no escopo do case, mas geraria downtime em caso de falha da task em produção real
-- Sem HTTPS no ALB (só porta 80) — precisaria de um listener 443 + certificado ACM
-- Task com IP público direto (sem NAT Gateway) — simplifica a rede, mas não é o padrão recomendado de produção (subnet privada + NAT)
-- Uma única IAM role (`execution_role`) — suficiente porque a aplicação não acessa outros serviços AWS; se precisasse, seria necessária uma `task_role` separada
+- Python >= 3.12
+- [uv](https://docs.astral.sh/uv/) (gerenciador de pacotes)
+- Docker (para build/run via Makefile)
+- Conta AWS + Terraform (apenas para deploy em nuvem — não necessário para rodar local)
 
-## O que eu faria diferente com mais tempo
+## Secrets do Github
 
-- Redundância (`desired_count >= 2`) e HTTPS no ALB
-- Persistir as features pré-processadas fora do container (ex: S3/Parquet), para não recalcular a cada novo container subindo
-- Tracing distribuído e alertas sobre as métricas já expostas
-- Validar a versão do `scikit-learn` usada no ambiente de serving contra a versão usada no treino do modelo (hoje há um `InconsistentVersionWarning` nos logs — modelo treinado em 1.8.0, ambiente com 1.9.0)
+Necessários no repositório (Settings → Secrets → Actions) para o workflow de deploy:
+
+| Secret | Descrição |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | Credencial AWS |
+| `AWS_SECRET_ACCESS_KEY` | Credencial AWS |
+| `AWS_REGION` | Região AWS (ex: `us-east-1`) |
+| `ECR_REPOSITORY` | Nome do repositório ECR |
+| `TF_STATE_BUCKET` | Bucket S3 onde fica o `terraform.tfstate` |
+
+## Informações do terraform
+
+- Backend remoto em S3, chave `itau/terraform.tfstate` — bucket definido pelo secret `TF_STATE_BUCKET`
+- Lock de state via `use_lockfile = true` (lock nativo do backend S3, sem necessidade de tabela DynamoDB)
+- `terraform init` recebe o bucket/região via `-backend-config` no próprio workflow do CI/CD
+
+## Melhorias Futuras
+
+_(a preencher)_
