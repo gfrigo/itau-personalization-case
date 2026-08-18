@@ -1,7 +1,7 @@
 variable "project_name" {
   description = "Nome usado no ECR, ECS, ALB e demais recursos"
   type        = string
-  default     = "itau-purchase-propensity"
+  default     = "itau-personalization-case"
 }
 
 variable "image_tag" {

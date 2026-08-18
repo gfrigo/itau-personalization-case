@@ -1,4 +1,4 @@
-name: Deploy Itaú purchase propensity model
+name: Deploy
 
 on:
   workflow_dispatch:
@@ -71,8 +71,6 @@ jobs:
             -backend-config="key=itau/terraform.tfstate" \
             -backend-config="region=${{ secrets.AWS_REGION }}"
 
-      # O ECR precisa existir antes do docker push, mas é o próprio Terraform
-      # que cria o ECR — por isso ele sobe sozinho primeiro, isolado do resto.
       - name: Terraform apply (ECR only)
         if: github.event.inputs.action == 'apply'
         working-directory: infra
