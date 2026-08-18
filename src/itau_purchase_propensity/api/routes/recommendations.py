@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import APIRouter, Request
 
@@ -20,12 +21,14 @@ logger = logging.getLogger(__name__)
 
 @router.get("/recommendations/{user_id}", response_model=RecommendationResponse)
 def get_recommendations(user_id: str, request: Request) -> RecommendationResponse:
+    start = time.perf_counter()
     result = recommend(
         user_id=user_id,
         repo=request.app.state.repository,
         model=request.app.state.model,
         top_n=config.top_n_recommendations,
     )
+    duration_ms = (time.perf_counter() - start) * 1000
 
     RECOMMENDATIONS_TOTAL.inc()
     if result.cold_start:
@@ -40,6 +43,7 @@ def get_recommendations(user_id: str, request: Request) -> RecommendationRespons
             "extra_fields": {
                 "user_id": user_id,
                 "cold_start": result.cold_start,
+                "duration_ms": round(duration_ms, 2),
             }
         },
     )
